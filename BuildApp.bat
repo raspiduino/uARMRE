@@ -1,4 +1,4 @@
-REM Build Bat File
+﻿REM Build Bat File
 REM Precheck the Resource 
 "D:\Data\MRE SDK V3.0.00\tools\ResEditor\CmdShell.exe" save  "D:\Data\dev\uARMRE\uARMRE.vcproj"
 REM Copmile c file 
@@ -58,6 +58,6 @@ REM Link app
 REM Pack resource to app 
 "D:\Data\MRE SDK V3.0.00\tools\ResEditor\CmdShell.exe" pack -silent -resolution 240x320 -o "D:\Data\dev\uARMRE\uARMRE.pkd" -e AXF "D:\Data\dev\uARMRE\uARMRE.vcproj" "D:\Data\dev\uARMRE\uARMRE.axf"
 REM Add tag infromation 
-"D:\Data\MRE SDK V3.0.00\tools\PackDigist.exe" "D:\Data\dev\uARMRE\uARMRE.vcproj" "uARMRE" "0.1.0" "uARMRE contributors" "2048" "NotSupportBg" "Not Support rotate" "uARMRE" "uARMRE" "uARMRE" "1234567890" "content" " TCP Sensor SMS(person) BitStream Contact MMS SMSMng" "vxp" "GCC" "PKD" "UnCompress" "NoVPI" "Adaptable" "15728960" "UnSysMemAble" "
+"D:\Data\MRE SDK V3.0.00\tools\PackDigist.exe" "D:\Data\dev\uARMRE\uARMRE.vcproj" "uARMRE" "0.1.0" "uARMRE contributors" "512" "NotSupportBg" "Not Support rotate" "uARMRE" "uARMRE" "uARMRE" "1234567890" "content" " TCP Sensor SMS(person) BitStream Contact MMS SMSMng" "vxp" "GCC" "PKD" "UnCompress" "NoVPI" "Adaptable" "15728960" "UnSysMemAble" "
     " "-1" "UNPUSH" "-1" ""  "UnAutoStart"  "UnTransferImg" "NoIdleShortcut"  D:\Data\dev\uARMRE\arm D:\Data\dev\uARMRE\build.log
 
