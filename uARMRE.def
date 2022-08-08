@@ -1,0 +1,7 @@
+; uARMRE.def : Declares the module parameters for the DLL.
+
+LIBRARY      "uARMRE"
+DESCRIPTION  'uARMRE Windows Dynamic Link Library'
+
+EXPORTS
+    vm_entry @1
