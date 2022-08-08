@@ -27,6 +27,10 @@
 // FIFO
 #include "fifo.h"
 
+// Macros
+#define SD_FILE "e:\\uARMRE\\jaunty.rel.v2"
+#define VRAM_FILE "e:\\uARMRE\\vram.bin"
+
 // Global variables
 int scr_w; 
 int scr_h;
@@ -226,14 +230,22 @@ void handle_sysevt(VMINT message, VMINT param) {
 		set_layer_handler(layer_bufs[0], layer_bufs[1], layer_hdls[1]); // Call to C++
 
 		// uARM init code
+
+		// Convert file path to ucs2
+		VMWSTR sd_path;
+		VMWSTR vram_path;
+
+		vm_gb2312_to_ucs2(sd_path, sizeof(SD_FILE), SD_FILE);
+		vm_gb2312_to_ucs2(vram_path, sizeof(VRAM_FILE), VRAM_FILE);	
+
 		// Open SD file and RAM file
-		sd = vm_file_open((VMWSTR)"E:\\jaunty.rel.v2", // Virtual disk file named "jaunty.rel.v2" (you can change yourself)
+		sd = vm_file_open(sd_path, // Virtual disk file named "jaunty.rel.v2" (you can change yourself)
 			MODE_CREATE_ALWAYS_WRITE,      // Read-Write mode, create file if not exist
 			VM_TRUE);                         // Open in binary mode
 
 		// Delete old "vram.bin" (if any)
-		vm_file_delete((VMWSTR)"E:\\vram.bin");
-		vram = vm_file_open((VMWSTR)"E:\\vram.bin", // Virtual ram file named "ram.bin" (you can change yourself)
+		vm_file_delete(vram_path);
+		vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)
 			MODE_CREATE_ALWAYS_WRITE,  // Read-Write mode, create file if not exist
 			VM_TRUE);                     // Open in binary mode
 
