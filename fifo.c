@@ -130,7 +130,7 @@ int fifo_discard(fifo_t fifo, uint16_t count, enum fifo_side side)
 
 static void fifo_copy_from(fifo_t fifo, void * item)
 {
-    memcpy(item, fifo->itemspace + fifo->readoffset, fifo->itemsize);
+    memcpy(item, (unsigned char*)fifo->itemspace + fifo->readoffset, fifo->itemsize);
     fifo->readoffset += fifo->itemsize;
     if (fifo->readoffset >= fifo->allocatedbytes) {
         fifo->readoffset = 0;
@@ -139,7 +139,7 @@ static void fifo_copy_from(fifo_t fifo, void * item)
 
 static void fifo_copy_to(fifo_t fifo, const void *item)
 {
-    memcpy(fifo->itemspace + fifo->writeoffset, item, fifo->itemsize);
+    memcpy((unsigned char*)fifo->itemspace + fifo->writeoffset, item, fifo->itemsize);
     fifo->writeoffset += fifo->itemsize;
     if (fifo->writeoffset >= fifo->allocatedbytes) {
         fifo->writeoffset = 0;
