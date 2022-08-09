@@ -24,9 +24,13 @@ typedef unsigned char Boolean;
 #define errInternal	0x01
 
 
-#define _INLINE_   	inline __attribute__ ((always_inline))
+#ifndef WIN32
 #define _UNUSED_	__attribute__((unused))
-
+#define _INLINE_   	inline __attribute__ ((always_inline))
+#else
+#define _UNUSED_
+#define _INLINE_   	inline
+#endif
 
 /* runtime stuffs */
 void err_str(const char* str);

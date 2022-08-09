@@ -109,7 +109,7 @@ int rootOps(_UNUSED_ void* userData, UInt32 sector, void* buf, UInt8 op){
 		
 		case BLK_OP_READ:
 			// Read from a block
-			if(vm_file_seek(sd, sector * BLK_DEV_BLK_SZ, BASE_BEGIN) <= 0) // Seek
+			if(vm_file_seek(sd, sector * BLK_DEV_BLK_SZ, BASE_BEGIN) < 0) // Seek
 				vm_exit_app(); // If error -> exit app
 
 			VMUINT r;
@@ -120,7 +120,7 @@ int rootOps(_UNUSED_ void* userData, UInt32 sector, void* buf, UInt8 op){
 			vm_file_commit(sd);
 
 			// Write to a block
-			if(vm_file_seek(sd, sector * BLK_DEV_BLK_SZ, BASE_BEGIN) <= 0) // Seek
+			if(vm_file_seek(sd, sector * BLK_DEV_BLK_SZ, BASE_BEGIN) < 0) // Seek
 				vm_exit_app(); // If error -> exit app
 
 			VMUINT w;
@@ -132,13 +132,15 @@ int rootOps(_UNUSED_ void* userData, UInt32 sector, void* buf, UInt8 op){
 Boolean coRamAccess(_UNUSED_ CalloutRam* ram, UInt32 addr, UInt8 size, Boolean write, void* bufP){
 
 	UInt8* b = bufP;
+
+	addr &= 0xFFFFFF;
 	
 	if(write) {
 		// Commit data to file
 		vm_file_commit(vram);
 
 		// Write to a block
-		if(vm_file_seek(vram, addr, BASE_BEGIN) <= 0) // Seek
+		if(vm_file_seek(vram, addr, BASE_BEGIN) < 0) // Seek
 			vm_exit_app(); // If error -> exit app
 		
 		VMUINT w;
@@ -146,7 +148,7 @@ Boolean coRamAccess(_UNUSED_ CalloutRam* ram, UInt32 addr, UInt8 size, Boolean w
 	}
 	else {
 		// Read from a block
-		if(vm_file_seek(vram, addr, BASE_BEGIN) <= 0) // Seek
+		if(vm_file_seek(vram, addr, BASE_BEGIN) < 0) // Seek
 			vm_exit_app(); // If error -> exit app
 		
 		VMUINT r;
@@ -214,6 +216,9 @@ void* emu_alloc(_UNUSED_ UInt32 size){
 
 // System event handler
 void handle_sysevt(VMINT message, VMINT param) {
+	VMWCHAR sd_path[100];
+	VMWCHAR vram_path[100];
+	unsigned char zero_array[1024] = {0};
 	switch (message) {
 	case VM_MSG_CREATE:
 	case VM_MSG_ACTIVE:
@@ -232,24 +237,44 @@ void handle_sysevt(VMINT message, VMINT param) {
 		// uARM init code
 
 		// Convert file path to ucs2
-		VMWSTR sd_path;
-		VMWSTR vram_path;
+		
 
-		vm_gb2312_to_ucs2(sd_path, sizeof(SD_FILE), SD_FILE);
-		vm_gb2312_to_ucs2(vram_path, sizeof(VRAM_FILE), VRAM_FILE);	
+		vm_gb2312_to_ucs2(sd_path, 1000, SD_FILE);
+		vm_gb2312_to_ucs2(vram_path, 1000, VRAM_FILE);	
 
 		// Open SD file and RAM file
 		sd = vm_file_open(sd_path, // Virtual disk file named "jaunty.rel.v2" (you can change yourself)
-			MODE_CREATE_ALWAYS_WRITE,      // Read-Write mode, create file if not exist
+			MODE_APPEND,      // Read-Write mode, create file if not exist
 			VM_TRUE);                         // Open in binary mode
 
+		wchar_t* sd_path2 = sd_path;
 		// Delete old "vram.bin" (if any)
 		vm_file_delete(vram_path);
 		vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)
 			MODE_CREATE_ALWAYS_WRITE,  // Read-Write mode, create file if not exist
 			VM_TRUE);                     // Open in binary mode
 
-		if (sd <= 0 && vram <= 0)
+		VMUINT writen; 
+		{
+			int i = 0;
+			for (; i < 16 * 1024; ++i) {
+				vm_file_write(vram, zero_array, 1024, &writen);
+				if (i % 1024 == 0) {
+					char tmp[100];
+					sprintf(tmp, "Generating ram %d/%d MB\n", i/1024, 16);
+					console_str_in(tmp);
+					draw();
+				}
+			}
+		}
+		{
+			char tmp[100];
+			sprintf(tmp, "RAM is generating\n");
+			console_str_in(tmp);
+			draw();
+		}
+
+		if (sd < 0 && vram < 0)
 			vm_exit_app(); // Error -> exit :)
 
 		socInit(&soc, socRamModeCallout, coRamAccess, readchar, writechar, rootOps, NULL); // Init SoC
