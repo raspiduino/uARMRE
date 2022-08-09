@@ -377,16 +377,9 @@ FodyWeavers.xsd
 
 # End of https://www.toptal.com/developers/gitignore/api/visualstudio
 
-
-config/dima
-config/auto
-BuildApp - Copy.bat
-#config.xml
 *.id0
 *.id1
 *.id2
 *.til
 *.nam
-custom_prebuild.bat
-Packagedll.bat
-TelnetVXP.dll
+*.dll

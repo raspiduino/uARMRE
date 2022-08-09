@@ -16,13 +16,14 @@
     <category>Contact</category>
     <category>MMS</category>
     <category>SMSMng</category>
+    <category>File</category>
   </APIAuth>
   <targetconfig>
     <supportbg>unchecked</supportbg>
     <userfont>unchecked</userfont>
     <screenrotate>unchecked</screenrotate>
     <autoadaptable>checked</autoadaptable>
-    <mem>512</mem>
+    <mem>2000</mem>
     <usesysmemory>unchecked</usesysmemory>
     <sysdisk>
     </sysdisk>
