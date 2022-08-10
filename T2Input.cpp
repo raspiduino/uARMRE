@@ -334,7 +334,7 @@ void T2Input::handle_keyevt(VMINT event, VMINT keycode){
 					draw_kb=!draw_kb;
 					break;
 				case VM_KEY_OK:
-					send_c("\r\n");
+					send_c("\n");
 					break;
 				case VM_KEY_STAR:
 					switch(state){
@@ -411,10 +411,21 @@ void T2Input::draw_xy_str_color(int x, int y, unsigned short textcolor,  unsigne
 		}
 	}
 }
+extern "C" {
+	extern unsigned int last_wr_addr, last_rd_addr;
+}
 
 void T2Input::draw(){
 	int time = vm_get_tick_count();
 	typedef const char * temp[10][10];
+	const unsigned short gray_color = VM_COLOR_888_TO_565(50, 50, 50); 
+
+	{
+		
+		char tmp[30];
+		sprintf(tmp, "%#08X %#08X", last_wr_addr, last_rd_addr);
+		draw_xy_str_color(0, 0, 0xFFFF, gray_color, tmp);
+	}
 
 	if(draw_kb){ // draw screen keyboard
 		show_current_pressed_key();
@@ -536,7 +547,6 @@ void T2Input::draw(){
 		}
 	}
 
-	const unsigned short gray_color = VM_COLOR_888_TO_565(50, 50, 50); 
 	if(!(time - last_input_time >= 1000 || last_input_time > time)){ //draw input mode
 		int y = (console.cursor_y==0?char_height:0), x = scr_w - 3*char_width;
 		draw_xy_str_color(x,y,0xFFFF,gray_color,imput_modes[(int)cur_input_mode]);

@@ -1,7 +1,7 @@
 #include "Console_io.h"
 #include "fifo.h"
 
-fifo_t serial_in = fifo_create(BUF_SIZE, sizeof(int));
+fifo_t serial_in;
 
 Console console;
 T2Input t2input;
