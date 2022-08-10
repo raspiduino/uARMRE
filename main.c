@@ -34,6 +34,7 @@
 // Global variables
 int scr_w; 
 int scr_h;
+unsigned int last_wr_addr = 0, last_rd_addr = 0;
 
 VMUINT8 *layer_bufs[2] = {0,0};
 VMINT layer_hdls[2] = {-1,-1};
@@ -49,6 +50,19 @@ VMFILE sd;
 VMFILE vram;
 
 extern fifo_t serial_in;
+
+
+
+typedef VMINT(*vm_get_sym_entry_t)(char* symbol);
+extern vm_get_sym_entry_t vm_get_sym_entry;
+
+typedef VMINT (*vm_file_seek_t)(VMFILE handle, VMINT offset, VMINT base);
+typedef VMINT (*vm_file_read_t)(VMFILE handle, void* data, VMUINT length, VMUINT* nread);
+typedef VMINT (*vm_file_write_t)(VMFILE handle, void* data, VMUINT length, VMUINT* written);
+
+vm_file_seek_t vm_file_seek_opt = 0;
+vm_file_read_t vm_file_read_opt = 0;
+vm_file_write_t vm_file_write_opt = 0;
 
 // If native MRE -> binding functions
 #ifndef WIN32
@@ -75,7 +89,7 @@ void handle_penevt(VMINT event, VMINT x, VMINT y);
 
 // uARM's function to read a *single* character from input
 static int readchar(void) {
-	if(!fifo_is_empty) {
+	if(!fifo_is_empty(serial_in)) {
 		// FIFO buffer available to read
 		int ret;
 		fifo_get(serial_in, &ret);
@@ -109,25 +123,29 @@ int rootOps(_UNUSED_ void* userData, UInt32 sector, void* buf, UInt8 op){
 		
 		case BLK_OP_READ:
 			// Read from a block
-			if(vm_file_seek(sd, sector * BLK_DEV_BLK_SZ, BASE_BEGIN) < 0) // Seek
+			if(vm_file_seek_opt(sd, sector * BLK_DEV_BLK_SZ, BASE_BEGIN) < 0) // Seek
 				vm_exit_app(); // If error -> exit app
 
 			VMUINT r;
-			return vm_file_read(sd, buf, BLK_DEV_BLK_SZ, &r) == BLK_DEV_BLK_SZ;
+			vm_file_read(sd, buf, BLK_DEV_BLK_SZ, &r);
+			return r == BLK_DEV_BLK_SZ;
 		
 		case BLK_OP_WRITE:
 			// Commit data to file
-			vm_file_commit(sd);
+			//vm_file_commit_opt(sd);
 
 			// Write to a block
-			if(vm_file_seek(sd, sector * BLK_DEV_BLK_SZ, BASE_BEGIN) < 0) // Seek
+			if(vm_file_seek_opt(sd, sector * BLK_DEV_BLK_SZ, BASE_BEGIN) < 0) // Seek
 				vm_exit_app(); // If error -> exit app
 
 			VMUINT w;
-			return vm_file_write(sd, buf, BLK_DEV_BLK_SZ, &w) == BLK_DEV_BLK_SZ;
+			vm_file_write_opt(sd, buf, BLK_DEV_BLK_SZ, &w);
+			return w == BLK_DEV_BLK_SZ;
 	}
 	return 0;	
 }
+
+
 
 Boolean coRamAccess(_UNUSED_ CalloutRam* ram, UInt32 addr, UInt8 size, Boolean write, void* bufP){
 
@@ -136,23 +154,25 @@ Boolean coRamAccess(_UNUSED_ CalloutRam* ram, UInt32 addr, UInt8 size, Boolean w
 	addr &= 0xFFFFFF;
 	
 	if(write) {
+		last_wr_addr = addr;
 		// Commit data to file
-		vm_file_commit(vram);
+		//vm_file_commit(vram);
 
 		// Write to a block
-		if(vm_file_seek(vram, addr, BASE_BEGIN) < 0) // Seek
+		if(vm_file_seek_opt(vram, addr, BASE_BEGIN) < 0) // Seek
 			vm_exit_app(); // If error -> exit app
 		
 		VMUINT w;
-		vm_file_write(vram, b, size, &w);
+		vm_file_write_opt(vram, b, size, &w);
 	}
 	else {
+		last_rd_addr = addr;
 		// Read from a block
-		if(vm_file_seek(vram, addr, BASE_BEGIN) < 0) // Seek
+		if(vm_file_seek_opt(vram, addr, BASE_BEGIN) < 0) // Seek
 			vm_exit_app(); // If error -> exit app
 		
 		VMUINT r;
-		vm_file_read(vram, b, size, &r);
+		vm_file_read_opt(vram, b, size, &r);
 	}
 
 	return true;
@@ -160,6 +180,12 @@ Boolean coRamAccess(_UNUSED_ CalloutRam* ram, UInt32 addr, UInt8 size, Boolean w
 
 // Main MRE entry point
 void vm_main(void){
+	vm_file_seek_opt = vm_get_sym_entry("vm_file_seek");
+	vm_file_read_opt = vm_get_sym_entry("vm_file_read");
+	vm_file_write_opt = vm_get_sym_entry("vm_file_write");
+
+	serial_in = fifo_create(BUF_SIZE, sizeof(int));
+
 	scr_w = vm_graphic_get_screen_width();
 	scr_h = vm_graphic_get_screen_height();
 
@@ -183,15 +209,19 @@ void timer(int tid){
 
 // SoC cycle
 void socRun(int tid){
-	cycles++; // Increase the cycle
-	
-	// Check if it's needed to update the devices' status
-	if(!(cycles & 0x000007UL)) pxa255timrTick(&soc.timr);
-	if(!(cycles & 0x0000FFUL)) pxa255uartProcess(&soc.ffuart);
-	if(!(cycles & 0x000FFFUL)) pxa255rtcUpdate(&soc.rtc);
-	if(!(cycles & 0x01FFFFUL)) pxa255lcdFrame(&soc.lcd);
-	
-	cpuCycle(&soc.cpu); // Emulate a single CPU cycle
+	int i = 0;
+	for (i=0; i < 1000; ++i) {
+		cycles++; // Increase the cycle
+
+		// Check if it's needed to update the devices' status
+		if (!(cycles & 0x000007UL)) pxa255timrTick(&soc.timr);
+		if (!(cycles & 0x0000FFUL)) pxa255uartProcess(&soc.ffuart);
+		if (!(cycles & 0x000FFFUL)) pxa255rtcUpdate(&soc.rtc);
+		if (!(cycles & 0x01FFFFUL)) pxa255lcdFrame(&soc.lcd);
+
+		cpuCycle(&soc.cpu); // Emulate a single CPU cycle
+	}
+	//draw();
 }
 
 void err_str(const char* str){
@@ -203,8 +233,8 @@ void err_str(const char* str){
 
 UInt32 rtcCurTime(void){
 	VMUINT ret;
-	vm_get_utc(&ret); // Get time since Epoch
-	return (UInt32)ret;
+	//vm_get_utc(&ret); // Get time since Epoch
+	return (UInt32)vm_get_tick_count();
 }
 
 void* emu_alloc(_UNUSED_ UInt32 size){
@@ -237,47 +267,104 @@ void handle_sysevt(VMINT message, VMINT param) {
 		// uARM init code
 
 		// Convert file path to ucs2
-		
 
-		vm_gb2312_to_ucs2(sd_path, 1000, SD_FILE);
-		vm_gb2312_to_ucs2(vram_path, 1000, VRAM_FILE);	
+		if (message == VM_MSG_CREATE) {
 
-		// Open SD file and RAM file
-		sd = vm_file_open(sd_path, // Virtual disk file named "jaunty.rel.v2" (you can change yourself)
-			MODE_APPEND,      // Read-Write mode, create file if not exist
-			VM_TRUE);                         // Open in binary mode
 
-		wchar_t* sd_path2 = sd_path;
-		// Delete old "vram.bin" (if any)
-		vm_file_delete(vram_path);
-		vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)
-			MODE_CREATE_ALWAYS_WRITE,  // Read-Write mode, create file if not exist
-			VM_TRUE);                     // Open in binary mode
+			vm_gb2312_to_ucs2(sd_path, 1000, SD_FILE);
+			vm_gb2312_to_ucs2(vram_path, 1000, VRAM_FILE);
 
-		VMUINT writen; 
-		{
-			int i = 0;
-			for (; i < 16 * 1024; ++i) {
-				vm_file_write(vram, zero_array, 1024, &writen);
-				if (i % 1024 == 0) {
+			// Open SD file and RAM file
+			sd = vm_file_open(sd_path, // Virtual disk file named "jaunty.rel.v2" (you can change yourself)
+				MODE_APPEND,      // Read-Write mode, create file if not exist
+				VM_TRUE);                         // Open in binary mode
+
+			wchar_t* sd_path2 = sd_path;
+			// Delete old "vram.bin" (if any)
+			//vm_file_delete(vram_path);
+			vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)
+				MODE_APPEND, 
+				VM_TRUE);                     // Open in binary mode
+
+			if(vram<0)
+				vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)
+					MODE_CREATE_ALWAYS_WRITE,
+					VM_TRUE);                     // Open in binary mode
+
+			
+			console_str_in("\n");
+			{
+				vm_file_seek(vram, 0, BASE_END);
+				int file_size = vm_file_tell(vram);
+				vm_file_seek(vram, 0, BASE_BEGIN);
+
+				if (file_size != 1024 * 1024 * 16) {
+					VMUINT writen;
+					{
+						int i = 0;
+						for (; i < 16 * 1024; ++i) {
+							vm_file_write_opt(vram, zero_array, 1024, &writen);
+							if (i % 1024 == 0) {
+								char tmp[100];
+								sprintf(tmp, "\rGenerating ram %d/%d MB", (i / 1024)+1, 16);
+								console_str_in(tmp);
+								draw();
+							}
+						}
+					}
+					{
+						char tmp[100];
+						sprintf(tmp, "... Done\n");
+						console_str_in(tmp);
+						draw();
+					}
+				}
+				else {
 					char tmp[100];
-					sprintf(tmp, "Generating ram %d/%d MB\n", i/1024, 16);
+					sprintf(tmp, "Found old RAM file\n");
 					console_str_in(tmp);
 					draw();
 				}
 			}
-		}
-		{
-			char tmp[100];
-			sprintf(tmp, "RAM is generating\n");
-			console_str_in(tmp);
-			draw();
-		}
 
-		if (sd < 0 && vram < 0)
-			vm_exit_app(); // Error -> exit :)
+			if (sd < 0 && vram < 0)
+				vm_exit_app(); // Error -> exit :)
 
-		socInit(&soc, socRamModeCallout, coRamAccess, readchar, writechar, rootOps, NULL); // Init SoC
+			socInit(&soc, socRamModeCallout, coRamAccess, readchar, writechar, rootOps, NULL); // Init SoC
+
+			if (1) {	//hack for faster boot in case we know all variables & button is pressed
+				UInt32 i, s = 786464UL;
+				UInt32 d = 0xA0E00000;
+				UInt16 j;
+				UInt8* b = (UInt8*)soc.blkDevBuf;
+
+				for (i = 0; i < 4096; i++) {
+					if (vm_file_seek_opt(sd, (s++) * BLK_DEV_BLK_SZ, BASE_BEGIN) < 0) // Seek
+						vm_exit_app(); // If error -> exit app
+
+					VMUINT r;
+					vm_file_read_opt(sd, b, BLK_DEV_BLK_SZ, &r);
+
+					if (i % 512 == 0) {
+						char tmp[100];
+						sprintf(tmp, "\rBoost launch  %d/%d", i+512, 4096);
+						console_str_in(tmp);
+						draw();
+					}
+
+					//sdSecRead(&sd, s++, b);
+					for (j = 0; j < 512; j += 32, d += 32) {
+						VMUINT w;
+						if (vm_file_seek_opt(vram, d & 0xFFFFFF, BASE_BEGIN) < 0) // Seek
+							vm_exit_app(); // If error -> exit app
+
+						vm_file_write_opt(vram, b + j, 32, &w);
+					}
+				}
+				soc.cpu.regs[15] = 0xA0E00000UL + 512UL;
+				console_str_in("... Done\n");
+			}
+		}
 
 		if(soc_cycle_timer_id == -1)
 			soc_cycle_timer_id = vm_create_timer(1, socRun); // 1 miliseconds each cycle -> 1KHz (slower than an AVR (5KHz :D)
