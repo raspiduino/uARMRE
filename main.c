@@ -233,8 +233,8 @@ void err_str(const char* str){
 
 UInt32 rtcCurTime(void){
 	VMUINT ret;
-	//vm_get_utc(&ret); // Get time since Epoch
-	return (UInt32)vm_get_tick_count();
+	vm_get_utc(&ret); // Get time since Epoch
+	return (UInt32)ret;
 }
 
 void* emu_alloc(_UNUSED_ UInt32 size){
