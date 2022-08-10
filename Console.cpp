@@ -635,6 +635,9 @@ void Console::draw_cur_char(){
 
 void Console::draw_all(){
 	vm_graphic_fill_rect(scr_buf, 0, 0, scr_w, scr_h, main_color, main_color);
+	for (int i = 0; i < terminal_h; ++i)
+		for (int j = 0; j < terminal_w; ++j)
+			draw_xy_char(j, i);
 }
 
 

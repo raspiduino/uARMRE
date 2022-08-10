@@ -51,6 +51,7 @@ VMFILE vram;
 
 extern fifo_t serial_in;
 
+int active = 0;
 
 
 typedef VMINT(*vm_get_sym_entry_t)(char* symbol);
@@ -233,8 +234,8 @@ void err_str(const char* str){
 
 UInt32 rtcCurTime(void){
 	VMUINT ret;
-	//vm_get_utc(&ret); // Get time since Epoch
-	return (UInt32)vm_get_tick_count();
+	vm_get_utc(&ret); // Get time since Epoch
+	return ret;//(UInt32)vm_get_tick_count();
 }
 
 void* emu_alloc(_UNUSED_ UInt32 size){
@@ -252,6 +253,7 @@ void handle_sysevt(VMINT message, VMINT param) {
 	switch (message) {
 	case VM_MSG_CREATE:
 	case VM_MSG_ACTIVE:
+		active = 1;
 		layer_hdls[0] = vm_graphic_create_layer(0, 0, scr_w, scr_h, -1);
 		layer_hdls[1] = vm_graphic_create_layer(0, 0, scr_w, scr_h, tr_color);
 		
@@ -378,24 +380,28 @@ void handle_sysevt(VMINT message, VMINT param) {
 		break;
 		
 	case VM_MSG_INACTIVE:
+		active = 0;
 		vm_switch_power_saving_mode(turn_on_mode);
 		if( layer_hdls[0] != -1 ){
-			vm_graphic_delete_layer(layer_hdls[0]);
 			vm_graphic_delete_layer(layer_hdls[1]);
+			vm_graphic_delete_layer(layer_hdls[0]);
+			layer_hdls[0] = -1;
 		}
 
 		// Delete timers
 		if(soc_cycle_timer_id != -1)
 			vm_delete_timer(soc_cycle_timer_id);
+		soc_cycle_timer_id = -1;
 		if(screen_timer_id!=-1)
 			vm_delete_timer(screen_timer_id);
+		screen_timer_id = -1;
 
 		// Commit data to file
-		vm_file_commit(sd);
+		//vm_file_commit(sd);
 
 		// Close file handlers
-		vm_file_close(sd);
-		vm_file_close(vram);
+		//vm_file_close(sd);
+		//vm_file_close(vram);
 		break;	
 	case VM_MSG_QUIT:
 		if( layer_hdls[0] != -1 ){
