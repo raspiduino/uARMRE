@@ -366,7 +366,7 @@ void handle_sysevt(VMINT message, VMINT param) {
 			soc_cycle_timer_id = vm_create_timer(0, socRun);
 
 		if(screen_timer_id==-1)
-			screen_timer_id = vm_create_timer(1000/SCREEN_FPS, timer); // fps (terminal refresh rate)
+			screen_timer_id = vm_create_timer(1000/SCREEN_FPS, timer); // terminal refresh
 		break;
 		
 	case VM_MSG_PAINT:
