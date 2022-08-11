@@ -30,6 +30,7 @@
 // Macros
 #define SD_FILE "e:\\uARMRE\\jaunty.rel.v2"
 #define VRAM_FILE "e:\\uARMRE\\vram.bin"
+#define CYCLES_PER_CALL 1000000 // Cycles excuted per call to socRun
 
 // Global variables
 int scr_w; 
@@ -50,8 +51,6 @@ VMFILE sd;
 VMFILE vram;
 
 extern fifo_t serial_in;
-
-
 
 typedef VMINT(*vm_get_sym_entry_t)(char* symbol);
 extern vm_get_sym_entry_t vm_get_sym_entry;
@@ -145,8 +144,6 @@ int rootOps(_UNUSED_ void* userData, UInt32 sector, void* buf, UInt8 op){
 	return 0;	
 }
 
-
-
 Boolean coRamAccess(_UNUSED_ CalloutRam* ram, UInt32 addr, UInt8 size, Boolean write, void* bufP){
 
 	UInt8* b = bufP;
@@ -200,17 +197,12 @@ void vm_main(void){
 void draw(){
 	t2input_draw(layer_bufs[1]); // Call to C++
 	vm_graphic_flush_layer(layer_hdls, 2); // Flush layer
-} 
-
-// Refresh screen
-void timer(int tid){
-	draw();
 }
 
 // SoC cycle
 void socRun(int tid){
-	int i = 0;
-	for (i=0; i < 1000; ++i) {
+	unsigned long i = 0;
+	for (i=0; i < CYCLES_PER_CALL; ++i) {
 		cycles++; // Increase the cycle
 
 		// Check if it's needed to update the devices' status
@@ -221,7 +213,11 @@ void socRun(int tid){
 
 		cpuCycle(&soc.cpu); // Emulate a single CPU cycle
 	}
-	//draw();
+}
+
+// Refresh screen
+void timer(int tid) {
+	draw();
 }
 
 void err_str(const char* str){
@@ -266,30 +262,27 @@ void handle_sysevt(VMINT message, VMINT param) {
 
 		// uARM init code
 
-		// Convert file path to ucs2
-
 		if (message == VM_MSG_CREATE) {
-
-
+			// Convert file path to ucs2
 			vm_gb2312_to_ucs2(sd_path, 1000, SD_FILE);
 			vm_gb2312_to_ucs2(vram_path, 1000, VRAM_FILE);
 
 			// Open SD file and RAM file
 			sd = vm_file_open(sd_path, // Virtual disk file named "jaunty.rel.v2" (you can change yourself)
-				MODE_APPEND,      // Read-Write mode, create file if not exist
-				VM_TRUE);                         // Open in binary mode
+				MODE_APPEND,           // Open in append mode
+				VM_TRUE);              // Open in binary mode
 
 			wchar_t* sd_path2 = sd_path;
-			// Delete old "vram.bin" (if any)
-			//vm_file_delete(vram_path);
+			
+			// If old RAM file available -> we just use it, don't need to generate again
 			vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)
-				MODE_APPEND, 
-				VM_TRUE);                     // Open in binary mode
+				MODE_APPEND,               // Open in append mode
+				VM_TRUE);                  // Open in binary mode
 
-			if(vram<0)
+			if(vram<0) // If the file is not existed
 				vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)
-					MODE_CREATE_ALWAYS_WRITE,
-					VM_TRUE);                     // Open in binary mode
+					MODE_CREATE_ALWAYS_WRITE,  // Create a new file and open it in read/write mode
+					VM_TRUE);                  // Open in binary mode
 
 			
 			console_str_in("\n");
@@ -327,8 +320,10 @@ void handle_sysevt(VMINT message, VMINT param) {
 				}
 			}
 
-			if (sd < 0 && vram < 0)
+			if (sd < 0 || vram < 0) {
+				console_str_in("Cannot open SD card file or VRAM file\n");
 				vm_exit_app(); // Error -> exit :)
+			}
 
 			socInit(&soc, socRamModeCallout, coRamAccess, readchar, writechar, rootOps, NULL); // Init SoC
 
@@ -367,10 +362,10 @@ void handle_sysevt(VMINT message, VMINT param) {
 		}
 
 		if(soc_cycle_timer_id == -1)
-			soc_cycle_timer_id = vm_create_timer(1, socRun); // 1 miliseconds each cycle -> 1KHz (slower than an AVR (5KHz :D)
+			soc_cycle_timer_id = vm_create_timer(0, socRun); // 1 miliseconds each call to socRun
 
 		if(screen_timer_id==-1)
-			screen_timer_id = vm_create_timer(1000/15, timer); // 15 fps (terminal refresh rate)
+			screen_timer_id = vm_create_timer(1000/100, timer); // 10 fps (terminal refresh rate)
 		break;
 		
 	case VM_MSG_PAINT:

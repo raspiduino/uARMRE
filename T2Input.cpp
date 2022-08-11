@@ -10,6 +10,10 @@ extern fifo_t serial_in;
 extern int scr_w; 
 extern int scr_h;
 
+// Tick and cycle to calculate current effective emulated speed.
+VMINT prev_tick;
+unsigned long prev_cycle;
+
 #ifdef WIN32
 static int abs(int a){
 	return a<0?-a:a;
@@ -413,6 +417,7 @@ void T2Input::draw_xy_str_color(int x, int y, unsigned short textcolor,  unsigne
 }
 extern "C" {
 	extern unsigned int last_wr_addr, last_rd_addr;
+	extern unsigned long cycles;
 }
 
 void T2Input::draw(){
@@ -421,10 +426,13 @@ void T2Input::draw(){
 	const unsigned short gray_color = VM_COLOR_888_TO_565(50, 50, 50); 
 
 	{
-		
-		char tmp[30];
-		sprintf(tmp, "%#08X %#08X", last_wr_addr, last_rd_addr);
+		char tmp[100];
+		sprintf(tmp, "%#08X %#08X %ul Hz", last_wr_addr, last_rd_addr, (cycles - prev_cycle)/(vm_get_tick_count() - prev_tick));
 		draw_xy_str_color(0, 0, 0xFFFF, gray_color, tmp);
+		
+		// Set the variables
+		prev_tick = vm_get_tick_count(); // Get the current tick count
+		prev_cycle = cycles;
 	}
 
 	if(draw_kb){ // draw screen keyboard
