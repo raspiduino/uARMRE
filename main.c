@@ -30,7 +30,13 @@
 // Macros
 #define SD_FILE "e:\\uARMRE\\jaunty.rel.v2"
 #define VRAM_FILE "e:\\uARMRE\\vram.bin"
+
+#ifdef WIN32
+#define CYCLES_PER_CALL 1000000 // Cycles excuted per call to socRun
+#else
 #define CYCLES_PER_CALL 2000 // Cycles excuted per call to socRun
+#endif
+
 #define SCREEN_FPS 20
 
 // Global variables
