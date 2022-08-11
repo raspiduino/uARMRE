@@ -30,7 +30,8 @@
 // Macros
 #define SD_FILE "e:\\uARMRE\\jaunty.rel.v2"
 #define VRAM_FILE "e:\\uARMRE\\vram.bin"
-#define CYCLES_PER_CALL 1000000 // Cycles excuted per call to socRun
+#define CYCLES_PER_CALL 2000 // Cycles excuted per call to socRun
+#define SCREEN_FPS 20
 
 // Global variables
 int scr_w; 
@@ -362,10 +363,10 @@ void handle_sysevt(VMINT message, VMINT param) {
 		}
 
 		if(soc_cycle_timer_id == -1)
-			soc_cycle_timer_id = vm_create_timer(0, socRun); // 1 miliseconds each call to socRun
+			soc_cycle_timer_id = vm_create_timer(0, socRun);
 
 		if(screen_timer_id==-1)
-			screen_timer_id = vm_create_timer(1000/100, timer); // 10 fps (terminal refresh rate)
+			screen_timer_id = vm_create_timer(1000/SCREEN_FPS, timer); // fps (terminal refresh rate)
 		break;
 		
 	case VM_MSG_PAINT:

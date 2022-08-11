@@ -427,7 +427,7 @@ void T2Input::draw(){
 
 	{
 		char tmp[100];
-		sprintf(tmp, "%#08X %#08X %ul Hz", last_wr_addr, last_rd_addr, (cycles - prev_cycle)/(vm_get_tick_count() - prev_tick));
+		sprintf(tmp, "%#08X %#08X %ul kHz", last_wr_addr, last_rd_addr, (cycles - prev_cycle)/(vm_get_tick_count() - prev_tick));
 		draw_xy_str_color(0, 0, 0xFFFF, gray_color, tmp);
 		
 		// Set the variables
