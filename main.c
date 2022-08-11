@@ -362,10 +362,10 @@ void handle_sysevt(VMINT message, VMINT param) {
 		}
 
 		if(soc_cycle_timer_id == -1)
-			soc_cycle_timer_id = vm_create_timer(0, socRun); // 1 miliseconds each call to socRun
+			soc_cycle_timer_id = vm_create_timer(0, socRun);
 
 		if(screen_timer_id==-1)
-			screen_timer_id = vm_create_timer(1000/100, timer); // 10 fps (terminal refresh rate)
+			screen_timer_id = vm_create_timer(1000/10, timer); // 10 FPS
 		break;
 		
 	case VM_MSG_PAINT:
