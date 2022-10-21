@@ -17,7 +17,7 @@
 	#endif
 #endif
 
-
+#define MBUF_SIZE	0x20000 // 64 KB buffer
 
 #define CHAR_CTL_C	-1L
 #define CHAR_NONE	-2L
@@ -79,6 +79,7 @@ typedef struct SoC{
 	void* blkD;
 	
 	UInt32 blkDevBuf[BLK_DEV_BLK_SZ / sizeof(UInt32)];
+	UInt8 *memcpy_buf; // buffer for memcpy
 
 	union{
 		ArmRam RAM;

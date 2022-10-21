@@ -53,74 +53,112 @@ static Boolean vMemF(ArmCpu* cpu, void* buf, UInt32 vaddr, UInt8 size, Boolean w
 	return mmuTranslate(&soc->mmu, vaddr, priviledged, write, &pa, fsrP) && memAccess(&soc->mem, pa, size, write, buf);
 }
 
+void memcpy_hpc(SoC* soc, UInt32 dst, UInt32 src, UInt32 sz) {
+    // memcpy hypercall
+
+    // Allocate buffer
+    soc->memcpy_buf = (UInt8*)vm_malloc(MBUF_SIZE);
+
+    UInt32 c = sz / MBUF_SIZE;
+
+    UInt32 i;
+
+    for (i = 0; i < c; i++) {
+        coRamAccess(NULL, src + i*MBUF_SIZE, MBUF_SIZE, 0, soc->memcpy_buf); // read
+        coRamAccess(NULL, dst + i*MBUF_SIZE, MBUF_SIZE, 1, soc->memcpy_buf); // write
+    }
+
+    UInt32 r = sz % MBUF_SIZE;
+
+    if (r > 0) {
+        // Copy the last bytes
+        coRamAccess(NULL, src + sz - r, r, 0, soc->memcpy_buf); // read
+        coRamAccess(NULL, dst + sz - r, r, 1, soc->memcpy_buf); // write
+    }
+}
 
 static Boolean hyperF(ArmCpu* cpu){		//return true if handled
 
 	SoC* soc = cpu->userData;
-	
+
 	switch(cpu->regs[12]){
-	
+
 		case 0:{
-		
+
 			err_str("Hypercall 0 caught\r\n");
 			soc->go = false;
 			break;
 		}
-		
+
 		case 1:{
-			
+
 			err_dec(cpu->regs[0]);
 			break;
 		}
-	
+
 		case 2:{
-			
+
 			char x[2];
 			x[1] = 0;
 			x[0] = cpu->regs[0];
 			err_str(x);
 			break;
 		}
-		
+
 		case 3:{
-			
+
 			cpu->regs[0] = RAM_SIZE;
 			break;
 		}
-		
+
 		case 4:{			//block device access perform [do a read or write]
-		
+
 			//IN:
 			// R0 = op
 			// R1 = sector
-			
+
 			return soc->blkF(soc->blkD, cpu->regs[1], soc->blkDevBuf, cpu->regs[0]);
 		}
-		
+
 		case 5:{			//block device buffer access [read or fill emulator's buffer]
-		
+
 			//IN:
 			// R0 = word value
 			// R1 = word offset (0, 1, 2...)
 			// R2 = op (1 = write, 0 = read)
 			//OUT:
 			// R0 = word value
-			
+
 			if(cpu->regs[1] >= BLK_DEV_BLK_SZ / sizeof(UInt32)) return false;	//invalid request
-			
+
 			if(cpu->regs[2] == 0){
-				
+
 				cpu->regs[0] = soc->blkDevBuf[cpu->regs[1]];
 			}
 			else if(cpu->regs[2] == 1){
-				
+
 				soc->blkDevBuf[cpu->regs[1]] = cpu->regs[0];
 			}
 			else return false;
+            break;
 		}
+
+        case 6: {
+            // memcpy hypercall (for Linux)
+            memcpy_hpc(soc, cpu->regs[0], cpu->regs[1], cpu->regs[2]);
+            break;
+        }
+
+        case 7: {
+            // memcpy hypercall (ELLE)
+            // ELLE pass to register 2 = sz/4
+            memcpy_hpc(soc, cpu->regs[0], cpu->regs[1], 4*cpu->regs[2]);
+            break;
+        }
 	}
 	return true;
 }
+
 
 static void setFaultAdrF(ArmCpu* cpu, UInt32 adr, UInt8 faultStatus){
 	

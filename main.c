@@ -151,7 +151,7 @@ int rootOps(_UNUSED_ void* userData, UInt32 sector, void* buf, UInt8 op){
 	return 0;	
 }
 
-Boolean coRamAccess(_UNUSED_ CalloutRam* ram, UInt32 addr, UInt8 size, Boolean write, void* bufP){
+Boolean coRamAccess(_UNUSED_ CalloutRam* ram, UInt32 addr, UInt32 size, Boolean write, void* bufP){
 
 	UInt8* b = bufP;
 
@@ -215,8 +215,8 @@ void socRun(int tid){
 		// Check if it's needed to update the devices' status
 		if (!(cycles & 0x000007UL)) pxa255timrTick(&soc.timr);
 		if (!(cycles & 0x0000FFUL)) pxa255uartProcess(&soc.ffuart);
-		if (!(cycles & 0x000FFFUL)) pxa255rtcUpdate(&soc.rtc);
-		if (!(cycles & 0x01FFFFUL)) pxa255lcdFrame(&soc.lcd);
+		//if (!(cycles & 0x000FFFUL)) pxa255rtcUpdate(&soc.rtc);
+		//if (!(cycles & 0x01FFFFUL)) pxa255lcdFrame(&soc.lcd);
 
 		cpuCycle(&soc.cpu); // Emulate a single CPU cycle
 	}
@@ -334,7 +334,7 @@ void handle_sysevt(VMINT message, VMINT param) {
 
 			socInit(&soc, socRamModeCallout, coRamAccess, readchar, writechar, rootOps, NULL); // Init SoC
 
-			if (1) {	//hack for faster boot in case we know all variables & button is pressed
+			if (0) {	//hack for faster boot in case we know all variables & button is pressed
 				UInt32 i, s = 786464UL;
 				UInt32 d = 0xA0E00000;
 				UInt16 j;
