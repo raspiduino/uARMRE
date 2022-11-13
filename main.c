@@ -30,9 +30,10 @@
 // Macros
 #define SD_FILE "e:\\uARMRE\\jaunty.rel.v2"
 #define VRAM_FILE "e:\\uARMRE\\vram.bin"
+#define STATE_FILE "e:\\uARMRE\\state.bin"
 
 #ifdef WIN32
-#define CYCLES_PER_CALL 1000000 // Cycles excuted per call to socRun
+#define CYCLES_PER_CALL 100000 // Cycles excuted per call to socRun
 #else
 #define CYCLES_PER_CALL 2000 // Cycles excuted per call to socRun
 #endif
@@ -43,6 +44,7 @@
 int scr_w; 
 int scr_h;
 unsigned int last_wr_addr = 0, last_rd_addr = 0;
+int vmstate = 1;
 
 VMUINT8 *layer_bufs[2] = {0,0};
 VMINT layer_hdls[2] = {-1,-1};
@@ -208,18 +210,131 @@ void draw(){
 
 // SoC cycle
 void socRun(int tid){
-	unsigned long i = 0;
-	for (i=0; i < CYCLES_PER_CALL; ++i) {
-		cycles++; // Increase the cycle
+	if (vmstate == 1) {
+		unsigned long i = 0;
+		for (i=0; i < CYCLES_PER_CALL; ++i) {
+			cycles++; // Increase the cycle
 
-		// Check if it's needed to update the devices' status
-		if (!(cycles & 0x000007UL)) pxa255timrTick(&soc.timr);
-		if (!(cycles & 0x0000FFUL)) pxa255uartProcess(&soc.ffuart);
-		//if (!(cycles & 0x000FFFUL)) pxa255rtcUpdate(&soc.rtc);
-		//if (!(cycles & 0x01FFFFUL)) pxa255lcdFrame(&soc.lcd);
+			// Check if it's needed to update the devices' status
+			if (!(cycles & 0x000007UL)) pxa255timrTick(&soc.timr);
+			if (!(cycles & 0x0000FFUL)) pxa255uartProcess(&soc.ffuart);
+			//if (!(cycles & 0x000FFFUL)) pxa255rtcUpdate(&soc.rtc);
+			//if (!(cycles & 0x01FFFFUL)) pxa255lcdFrame(&soc.lcd);
 
-		cpuCycle(&soc.cpu); // Emulate a single CPU cycle
+			cpuCycle(&soc.cpu); // Emulate a single CPU cycle
+		}
 	}
+}
+
+// Save emulator's state
+void save_state() {
+	VMUINT n;	   // Required for read/write apis, but useless
+	//char tag[100]; // Data tag
+
+	// Open state file
+	VMWCHAR state_path[100];
+	vm_gb2312_to_ucs2(state_path, 1000, STATE_FILE);
+	VMFILE sf = vm_file_open(state_path, // State load/save file
+		MODE_CREATE_ALWAYS_WRITE,		 // Create a new file and open it in read/write mode
+		VM_TRUE);						 // Open in binary mode
+
+	// Save SoC struct
+	//sprintf(tag, "\nsoc\n"); // tag
+	//vm_file_write_opt(sf, tag, sizeof(tag), &n);
+	vm_file_write_opt(sf, (UInt8*)&soc, sizeof(soc), &n);
+
+	// Close file
+	vm_file_close(sf);
+}
+
+// Load emulator's state
+void load_state() {
+	VMUINT n;	   // Required for read/write apis, but useless
+	SoC org = soc; // Save current SoC state
+	int i;		   // Loop counter
+
+	// Open state file
+	VMWCHAR state_path[100];
+	vm_gb2312_to_ucs2(state_path, 1000, STATE_FILE);
+	VMFILE sf = vm_file_open(state_path, // State load/save file
+		MODE_APPEND,					 // Open in append mode
+		VM_TRUE);						 // Open in binary mode
+
+	// Load SoC struct
+	vm_file_seek_opt(sf, 0, BASE_BEGIN); // Move cusor to the top
+	vm_file_read_opt(sf, (UInt8*)&soc, sizeof(soc), &n);
+
+	// Restore original address pointers
+	// The pointers change each time the vxp is executed, so they need to be restored, otherwise
+	// access violation will be thrown
+
+	// Top level
+	soc.blkD = org.blkD;
+	//soc.blkDevBuf = org.blkDevBuf;
+	soc.blkF = org.blkF;
+	soc.memcpy_buf = org.memcpy_buf;
+	soc.rcF = org.rcF;
+	soc.wcF = org.wcF;
+
+	// RAM struct
+	soc.ram.RAM.buf = org.ram.RAM.buf;
+
+	// UART structs
+	//soc.btuart.accessFuncsData = org.btuart.accessFuncsData;
+	//soc.btuart.ic = org.btuart.ic;
+	soc.ffuart.accessFuncsData = org.ffuart.accessFuncsData;
+	soc.ffuart.ic = org.ffuart.ic;
+	soc.ffuart.readF = org.ffuart.readF;
+	soc.ffuart.writeF = org.ffuart.writeF;
+	//soc.stuart.accessFuncsData = org.btuart.accessFuncsData;
+	//soc.stuart.ic = org.btuart.ic;
+
+	// cp15
+	soc.cp15.cpu = org.cp15.cpu;
+	soc.cp15.mmu = org.cp15.mmu;
+	
+	// CPU
+	soc.cpu.userData = org.cpu.userData;
+	soc.cpu.memF = org.cpu.memF;
+	soc.cpu.ic.memF = org.cpu.ic.memF;
+	soc.cpu.ic.cpu = org.cpu.ic.cpu;
+	//soc.cpu.ic->ptr = org.cpu.ic->ptr;
+	soc.cpu.setFaultAdrF = org.cpu.setFaultAdrF;
+	
+	for (i = 0; i < 16; i++) {
+		soc.cpu.coproc[i] = org.cpu.coproc[i];
+	}
+
+	soc.cpu.hypercallF = org.cpu.hypercallF;
+	
+	// DMA
+	soc.dma.ic = org.dma.ic;
+	soc.dma.mem = org.dma.mem;
+
+	// GPIO
+	soc.gpio.ic = org.gpio.ic;
+	
+	// ic
+	soc.ic.cpu = org.ic.cpu;
+
+	// mem
+	for (i = 0; i < MAX_MEM_REGIONS; i++) {
+		soc.mem.regions[i].aF = org.mem.regions[i].aF;
+		soc.mem.regions[i].uD = org.mem.regions[i].uD;
+	}
+	
+	// MMU
+	soc.mmu.userData = org.mmu.userData;
+	soc.mmu.readF = org.mmu.readF;
+
+	// pwrClk
+	soc.pwrClk.cpu = org.pwrClk.cpu;
+
+	// timr
+	soc.timr.ic = org.timr.ic;
+
+	// Close file
+	vm_file_close(sf);
 }
 
 // Refresh screen
@@ -279,7 +394,7 @@ void handle_sysevt(VMINT message, VMINT param) {
 				MODE_APPEND,           // Open in append mode
 				VM_TRUE);              // Open in binary mode
 
-			wchar_t* sd_path2 = sd_path;
+			//wchar_t* sd_path2 = sd_path;
 			
 			// If old RAM file available -> we just use it, don't need to generate again
 			vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)

@@ -66,7 +66,7 @@ const name_and_code ctrl_keyboard[10][10] =
 
 const char * num_keyboard[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 const char * Fnum_keyboard[12] = {"F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12"};
-const char * set_keyboard[12] = {"F%", "CTRL", "", "TAB", "", "", "", "", "", "Back", "", ""};
+const char * set_keyboard[12] = {"F%", "CTRL", "TAB", "PAUSE", "CONT", "LOAD", "SAVE", "", "", "Back", "", ""};
 
 const char * Fnum_codes[12] = {"\033[1P", "\033[1Q", "\033[1R", "\033[1S", "\033[15~", 
 	"\033[17~", "\033[18~", "\033[19~", "\033[20~", "\033[21~", "\033[23~", "\033[24~"};
@@ -288,6 +288,28 @@ void T2Input::numpad_input(int keycode){ //TODO: remake this
 				case 3:
 					console_str_out("\t");
 					state=MAIN;
+					break;
+				case 4:
+					// Pause
+					vmstate = 0;
+					state = MAIN;
+					break;
+				case 5:
+					// Continue
+					vmstate = 1;
+					state = MAIN;
+					break;
+				case 6:
+					// Load
+					vmstate = 0;
+					load_state();
+					state = MAIN;
+					break;
+				case 7:
+					// Save
+					vmstate = 0;
+					save_state();
+					state = MAIN;
 					break;
 			}
 			break;

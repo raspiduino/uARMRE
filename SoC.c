@@ -214,7 +214,7 @@ static UInt16 socUartPrvRead(void* userData){			//these are special funcs since 
 	r = soc->rcF();
 	if(r == CHAR_CTL_C) v = UART_CHAR_BREAK;
 	else if(r == CHAR_NONE) v = UART_CHAR_NONE;
-	else if(r >= 0x100) v = UART_CHAR_NONE;		//we canot send this char!!!
+	else if(r >= 0x100) v = UART_CHAR_NONE;		//we cannot send this char!!!
 	else v = r;
 	
 	return v;
