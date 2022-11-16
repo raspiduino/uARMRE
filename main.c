@@ -28,9 +28,10 @@
 #include "fifo.h"
 
 // Macros
-#define SD_FILE "e:\\uARMRE\\jaunty.rel.v2"
-#define VRAM_FILE "e:\\uARMRE\\vram.bin"
-#define STATE_FILE "e:\\uARMRE\\state.bin"
+#define SD_FILE "e:\\uARMRE\\jaunty.rel.v2" // Disk file
+#define VRAM_FILE "e:\\uARMRE\\vram.bin"    // Virtual RAM file
+#define STATE_FILE "e:\\uARMRE\\state.bin"  // Machine state for restoring
+#define RRAM_FILE "e:\\uARMRE\\rram.bin"    // Restore RAM
 
 #ifdef WIN32
 #define CYCLES_PER_CALL 100000 // Cycles excuted per call to socRun
@@ -44,7 +45,7 @@
 int scr_w; 
 int scr_h;
 unsigned int last_wr_addr = 0, last_rd_addr = 0;
-int vmstate = 1;
+int vmstate = -1; // Pause on start, need to click "continue" button to start (reason: for restoring state if needed)
 
 VMUINT8 *layer_bufs[2] = {0,0};
 VMINT layer_hdls[2] = {-1,-1};
@@ -226,6 +227,9 @@ void socRun(int tid){
 	}
 }
 
+// Callback for file copy, do nothing for now
+VMINT vm_file_copy_callback(VMINT act, VMUINT32 total, VMUINT32 completed, VMINT hdl) {}
+
 // Save emulator's state
 void save_state() {
 	VMUINT n;	   // Required for read/write apis, but useless
@@ -242,6 +246,15 @@ void save_state() {
 	//sprintf(tag, "\nsoc\n"); // tag
 	//vm_file_write_opt(sf, tag, sizeof(tag), &n);
 	vm_file_write_opt(sf, (UInt8*)&soc, sizeof(soc), &n);
+
+	// Copy VRAM file to RRAM file
+	VMWCHAR vram_path[100];
+	vm_gb2312_to_ucs2(vram_path, 1000, VRAM_FILE);
+	VMWCHAR rram_path[100];
+	vm_gb2312_to_ucs2(rram_path, 1000, RRAM_FILE);
+
+	vm_file_delete(rram_path); // Delete old RRAM file if needed
+	vm_file_copy(rram_path, vram_path, vm_file_copy_callback); // Copy
 
 	// Close file
 	vm_file_close(sf);
@@ -306,6 +319,7 @@ void load_state() {
 	}
 
 	soc.cpu.hypercallF = org.cpu.hypercallF;
+	soc.cpu.emulErrF = org.cpu.emulErrF;
 	
 	// DMA
 	soc.dma.ic = org.dma.ic;
@@ -333,8 +347,27 @@ void load_state() {
 	// timr
 	soc.timr.ic = org.timr.ic;
 
+	// buffer
+	soc.memcpy_buf = org.memcpy_buf;
+
 	// Close file
 	vm_file_close(sf);
+
+	// Restore RRAM to VRAM
+	VMWCHAR vram_path[100];
+	vm_gb2312_to_ucs2(vram_path, 1000, VRAM_FILE);
+	VMWCHAR rram_path[100];
+	vm_gb2312_to_ucs2(rram_path, 1000, RRAM_FILE);
+
+	// Close and delete old VRAM file
+	vm_file_close(vram);
+	vm_file_delete(vram_path);
+	vm_file_copy(vram_path, rram_path, vm_file_copy_callback); // Copy
+	
+	// Reopen the vram file handle
+	vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)
+		MODE_APPEND,               // Open in append mode
+		VM_TRUE);                  // Open in binary mode
 }
 
 // Refresh screen
@@ -481,6 +514,11 @@ void handle_sysevt(VMINT message, VMINT param) {
 				soc.cpu.regs[15] = 0xA0E00000UL + 512UL;
 				console_str_in("... Done\n");
 			}
+
+			console_str_in("uARMRE: Linux on Nokia!\n");
+			console_str_in("Open menu, and select CONT to start the emulator\n");
+			console_str_in("For restoring state, click LOAD and then CONT\n");
+			console_str_in("==================================\n");
 		}
 
 		if(soc_cycle_timer_id == -1)

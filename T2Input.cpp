@@ -296,6 +296,7 @@ void T2Input::numpad_input(int keycode){ //TODO: remake this
 					break;
 				case 5:
 					// Continue
+					if (vmstate == -1) console_str_in("\n"); // TODO: place correct escape sequence here for clearing screen
 					vmstate = 1;
 					state = MAIN;
 					break;
