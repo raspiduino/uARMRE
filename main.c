@@ -50,7 +50,6 @@ unsigned int last_wr_addr = 0, last_rd_addr = 0;
 // -1: on startup
 //  0: pause
 //  1: run
-//  2: done copying file (a waiting flag)
 int vmstate = -1; // Pause on start, need to click "continue" button to start (reason: for restoring state if needed)
 
 VMUINT8 *layer_bufs[2] = {0,0};
@@ -233,16 +232,9 @@ void socRun(int tid){
 	}
 }
 
-// Callback for file copy
-VMINT vm_file_copy_callback(VMINT act, VMUINT32 total, VMUINT32 completed, VMINT hdl) {
-	// Set vmstate to 2 -> done
-	vmstate = 2;
-}
-
 // Save emulator's state
 void save_state() {
 	VMUINT n;	   // Required for read/write apis, but useless
-	//char tag[100]; // Data tag
 
 	// Open state file
 	VMWCHAR state_path[100];
@@ -251,31 +243,61 @@ void save_state() {
 		MODE_CREATE_ALWAYS_WRITE,		 // Create a new file and open it in read/write mode
 		VM_TRUE);						 // Open in binary mode
 
-	// Save SoC struct
-	//sprintf(tag, "\nsoc\n"); // tag
-	//vm_file_write_opt(sf, tag, sizeof(tag), &n);
 	vm_file_write_opt(sf, (UInt8*)&soc, sizeof(soc), &n);
+	
+	// Close file
+	vm_file_close(sf);
 
 	// Copy VRAM file to RRAM file
 	VMWCHAR vram_path[100];
 	vm_gb2312_to_ucs2(vram_path, 1000, VRAM_FILE);
 	VMWCHAR rram_path[100];
 	vm_gb2312_to_ucs2(rram_path, 1000, RRAM_FILE);
+	
+	// Open RRAM
+	VMINT rram = vm_file_open(rram_path, MODE_CREATE_ALWAYS_WRITE, VM_TRUE);
 
-	vm_file_delete(rram_path); // Delete old RRAM file if needed
-	vm_file_copy(rram_path, vram_path, vm_file_copy_callback); // Copy
-	while (vmstate != 2); // Waiting for copying file
-	vmstate = 0;
+	// Allocate buffer
+	soc.memcpy_buf = (UInt8*)vm_malloc(MBUF_SIZE);
 
-	// Close file
-	vm_file_close(sf);
+	// Copy
+	VMUINT32 c = RAM_SIZE / MBUF_SIZE;
+	VMUINT32 i;
+
+	for (i = 0; i < c; i++) {
+		// Read
+		vm_file_seek_opt(vram, MBUF_SIZE * i, BASE_BEGIN);
+		vm_file_read_opt(vram, soc.memcpy_buf, MBUF_SIZE, &n);
+
+		// Write
+		//vm_file_seek_opt(src, MBUF_SIZE * i, BASE_BEGIN);
+		vm_file_write_opt(rram, soc.memcpy_buf, MBUF_SIZE, &n);
+	}
+
+	VMUINT32 r = RAM_SIZE % MBUF_SIZE;
+
+	if (r > 0) {
+		// Read
+		vm_file_seek_opt(vram, MBUF_SIZE * i, BASE_BEGIN);
+		vm_file_read_opt(vram, (UInt8*)&soc.memcpy_buf, r, &n);
+
+		// Write
+		//vm_file_seek_opt(src, MBUF_SIZE * i, BASE_BEGIN);
+		vm_file_write_opt(rram, (UInt8*)&soc.memcpy_buf, r, &n);
+	}
+
+	// Close RRAM
+	vm_file_close(rram);
+
+	// Free buffer
+	vm_free(soc.memcpy_buf);
 }
 
-// Load emulator's state
-void load_state() {
+// Load state only, not RAM
+void load_man() {
 	VMUINT n;	   // Required for read/write apis, but useless
 	SoC org = soc; // Save current SoC state
-	int i;		   // Loop counter
+	int i;	       // Loop counter
 
 	// Open state file
 	VMWCHAR state_path[100];
@@ -316,7 +338,7 @@ void load_state() {
 	// cp15
 	soc.cp15.cpu = org.cp15.cpu;
 	soc.cp15.mmu = org.cp15.mmu;
-	
+
 	// CPU
 	soc.cpu.userData = org.cpu.userData;
 	soc.cpu.memF = org.cpu.memF;
@@ -324,21 +346,21 @@ void load_state() {
 	soc.cpu.ic.cpu = org.cpu.ic.cpu;
 	//soc.cpu.ic->ptr = org.cpu.ic->ptr;
 	soc.cpu.setFaultAdrF = org.cpu.setFaultAdrF;
-	
+
 	for (i = 0; i < 16; i++) {
 		soc.cpu.coproc[i] = org.cpu.coproc[i];
 	}
 
 	soc.cpu.hypercallF = org.cpu.hypercallF;
 	soc.cpu.emulErrF = org.cpu.emulErrF;
-	
+
 	// DMA
 	soc.dma.ic = org.dma.ic;
 	soc.dma.mem = org.dma.mem;
 
 	// GPIO
 	soc.gpio.ic = org.gpio.ic;
-	
+
 	// ic
 	soc.ic.cpu = org.ic.cpu;
 
@@ -347,7 +369,7 @@ void load_state() {
 		soc.mem.regions[i].aF = org.mem.regions[i].aF;
 		soc.mem.regions[i].uD = org.mem.regions[i].uD;
 	}
-	
+
 	// MMU
 	soc.mmu.userData = org.mmu.userData;
 	soc.mmu.readF = org.mmu.readF;
@@ -358,11 +380,15 @@ void load_state() {
 	// timr
 	soc.timr.ic = org.timr.ic;
 
-	// buffer
-	soc.memcpy_buf = org.memcpy_buf;
-
 	// Close file
 	vm_file_close(sf);
+}
+
+// Load emulator's state
+void load_state() {
+	load_man();
+
+	VMUINT n;	   // Required for read/write apis, but useless
 
 	// Restore RRAM to VRAM
 	VMWCHAR vram_path[100];
@@ -370,18 +396,50 @@ void load_state() {
 	VMWCHAR rram_path[100];
 	vm_gb2312_to_ucs2(rram_path, 1000, RRAM_FILE);
 
-	// Close and delete old VRAM file
-	vm_file_close(vram);
-	vm_file_delete(vram_path);
-	vm_file_copy(vram_path, rram_path, vm_file_copy_callback); // Copy
+	// Open RRAM
+	VMINT rram = vm_file_open(rram_path, MODE_READ, VM_TRUE);
 
-	while (vmstate != 2); // Waiting for copying file
-	vmstate = 0;
-	
-	// Reopen the vram file handle
+	// Create new VRAM file
+	vm_file_close(vram);
 	vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)
-		MODE_APPEND,               // Open in append mode
+		MODE_CREATE_ALWAYS_WRITE,  // Create a new file and open it in read/write mode
 		VM_TRUE);                  // Open in binary mode
+
+	// Allocate buffer
+	soc.memcpy_buf = (UInt8*)vm_malloc(MBUF_SIZE);
+
+	// Copy
+	VMUINT32 c = RAM_SIZE / MBUF_SIZE;
+
+	VMUINT32 i;
+
+	for (i = 0; i < c; i++) {
+		// Read
+		vm_file_seek_opt(rram, MBUF_SIZE * i, BASE_BEGIN);
+		vm_file_read_opt(rram, soc.memcpy_buf, MBUF_SIZE, &n);
+
+		// Write
+		//vm_file_seek_opt(src, MBUF_SIZE * i, BASE_BEGIN);
+		vm_file_write_opt(vram, soc.memcpy_buf, MBUF_SIZE, &n);
+	}
+
+	VMUINT32 r = RAM_SIZE % MBUF_SIZE;
+
+	if (r > 0) {
+		// Read
+		vm_file_seek_opt(rram, MBUF_SIZE * i, BASE_BEGIN);
+		vm_file_read_opt(rram, soc.memcpy_buf, r, &n);
+
+		// Write
+		//vm_file_seek_opt(src, MBUF_SIZE * i, BASE_BEGIN);
+		vm_file_write_opt(vram, soc.memcpy_buf, r, &n);
+	}
+
+	// Close RRAM
+	vm_file_close(rram);
+
+	// Free buffer
+	vm_free(soc.memcpy_buf);
 }
 
 // Refresh screen

@@ -70,6 +70,8 @@ extern volatile UInt32 gRtc;	//needed by SoC
 #include "pxa255_DSP.h"
 #include "pxa255_LCD.h"
 
+#define RAM_SIZE	0x01000000UL	//16M @ 0xA0000000
+
 typedef struct SoC{
 
 	readcharF rcF;

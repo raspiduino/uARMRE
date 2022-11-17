@@ -33,7 +33,6 @@ static const UInt8 embedded_boot[] =	{
 #define ROM_SIZE	sizeof(embedded_boot)
 
 #define RAM_BASE	0xA0000000UL
-#define RAM_SIZE	0x01000000UL	//16M @ 0xA0000000
 
 
 static Boolean vMemF(ArmCpu* cpu, void* buf, UInt32 vaddr, UInt8 size, Boolean write, Boolean priviledged, UInt8* fsrP){
@@ -56,8 +55,8 @@ static Boolean vMemF(ArmCpu* cpu, void* buf, UInt32 vaddr, UInt8 size, Boolean w
 void memcpy_hpc(SoC* soc, UInt32 dst, UInt32 src, UInt32 sz) {
     // memcpy hypercall
 
-    // Allocate buffer
-    soc->memcpy_buf = (UInt8*)vm_malloc(MBUF_SIZE);
+	// Allocate buffer
+	soc->memcpy_buf = (UInt8*)vm_malloc(MBUF_SIZE);
 
     UInt32 c = sz / MBUF_SIZE;
 
@@ -75,6 +74,9 @@ void memcpy_hpc(SoC* soc, UInt32 dst, UInt32 src, UInt32 sz) {
         coRamAccess(NULL, src + sz - r, r, 0, soc->memcpy_buf); // read
         coRamAccess(NULL, dst + sz - r, r, 1, soc->memcpy_buf); // write
     }
+
+	// Free buffer
+	vm_free(soc->memcpy_buf);
 }
 
 static Boolean hyperF(ArmCpu* cpu){		//return true if handled

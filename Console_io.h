@@ -30,6 +30,7 @@ extern fifo_t serial_in;
 
 void save_state();
 void load_state();
+void load_man();
 
 #ifdef __cplusplus
 }
