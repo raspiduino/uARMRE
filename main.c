@@ -45,6 +45,12 @@
 int scr_w; 
 int scr_h;
 unsigned int last_wr_addr = 0, last_rd_addr = 0;
+
+// vmstate values:
+// -1: on startup
+//  0: pause
+//  1: run
+//  2: done copying file (a waiting flag)
 int vmstate = -1; // Pause on start, need to click "continue" button to start (reason: for restoring state if needed)
 
 VMUINT8 *layer_bufs[2] = {0,0};
@@ -227,8 +233,11 @@ void socRun(int tid){
 	}
 }
 
-// Callback for file copy, do nothing for now
-VMINT vm_file_copy_callback(VMINT act, VMUINT32 total, VMUINT32 completed, VMINT hdl) {}
+// Callback for file copy
+VMINT vm_file_copy_callback(VMINT act, VMUINT32 total, VMUINT32 completed, VMINT hdl) {
+	// Set vmstate to 2 -> done
+	vmstate = 2;
+}
 
 // Save emulator's state
 void save_state() {
@@ -255,6 +264,8 @@ void save_state() {
 
 	vm_file_delete(rram_path); // Delete old RRAM file if needed
 	vm_file_copy(rram_path, vram_path, vm_file_copy_callback); // Copy
+	while (vmstate != 2); // Waiting for copying file
+	vmstate = 0;
 
 	// Close file
 	vm_file_close(sf);
@@ -363,6 +374,9 @@ void load_state() {
 	vm_file_close(vram);
 	vm_file_delete(vram_path);
 	vm_file_copy(vram_path, rram_path, vm_file_copy_callback); // Copy
+
+	while (vmstate != 2); // Waiting for copying file
+	vmstate = 0;
 	
 	// Reopen the vram file handle
 	vram = vm_file_open(vram_path, // Virtual ram file named "ram.bin" (you can change yourself)
